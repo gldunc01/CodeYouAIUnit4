@@ -151,10 +151,10 @@ For markdown documents, respect the document structure (headings, sections).
 Create a function to chunk markdown by structure:
 - Read the EmployeeHandbook.md file
 - Use MarkdownHeaderTextSplitter from langchain_text_splitters with:
-  - headers_to_split_on=[("#", "Header 1"), ("##", "Header 2"), ("###", "Header 3")]
+  - headers_to_split_on=[("#", "Header 1"), ("##", "Header 2")]
 - This splits the document on markdown headers, preserving structure
 - Then apply RecursiveCharacterTextSplitter with:
-  - chunk_size=1500
+  - chunk_size=5000
   - chunk_overlap=200
 - The overlap helps preserve context across chunk boundaries
 - Pass the chunks to load_document_with_chunks
