@@ -1,10 +1,52 @@
+from langchain_core.documents import Document
 import os
 import math
 from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
+from langchain_core.vectorstores import InMemoryVectorStore
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
+
+def load_document(vector_store, file_path):
+    """
+    Loads a document from file_path, creates a Document with metadata, adds it to the vector store, and returns the document ID.
+    Handles file errors gracefully.
+    """
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            text = f.read()
+        metadata = {
+            'fileName': os.path.basename(file_path),
+            'createdAt': datetime.now().isoformat()
+        }
+        doc = Document(page_content=text, metadata=metadata)
+        doc_ids = vector_store.add_documents([doc])
+        print(f"Loaded '{metadata['fileName']}' ({len(text)} chars) into vector store.")
+        return doc_ids[0] if doc_ids else None
+    except FileNotFoundError:
+        print(f"Error: File not found: {file_path}")
+        return None
+    except Exception as e:
+        err_msg = str(e)
+        if "maximum context length" in err_msg or "token" in err_msg:
+            print("⚠️ This document is too large to embed as a single chunk.")
+            print("Token limit exceeded. The embedding model can only process up to 8,191 tokens at once.")
+            print("Solution: The document needs to be split into smaller chunks.")
+        else:
+            print(f"Error loading document: {err_msg}")
+        return None
+
+def search_sentences(vector_store, query, k=3):
+    """
+    Search for the top-k most similar sentences in the vector store to the query.
+    Prints the results with rank, similarity score, and sentence text.
+    """
+    results = vector_store.similarity_search_with_score(query, k=k)
+    print(f"\nTop {k} results for query: '{query}'")
+    for rank, (doc, score) in enumerate(results, 1):
+        print(f"{rank}. Score: {score:.4f} | Sentence: {doc.page_content}")
 
 def cosine_similarity(vector_a, vector_b):
     """
@@ -38,30 +80,20 @@ def main():
         api_key=os.getenv("GITHUB_TOKEN"),
         check_embedding_ctx_length=False
     )
-    print("=== Embedding Inspector Lab ===")
-    print("Generating embeddings for three sentences...")
 
-    sentences = [
-    "I hate the cold weather.",
-    "I love the cold weather.",
-    "The weather is cold."
-]
-    embedding_vectors = []
-    for idx, sentence in enumerate(sentences, 1):
-        print(f"Sentence {idx}: {sentence}")
-        embedding = embeddings.embed_query(sentence)
-        embedding_vectors.append(embedding)
+    # Create InMemoryVectorStore instance
+    vector_store = InMemoryVectorStore(embeddings)
 
-    # Calculate and display cosine similarities
-    print("\nCosine Similarity Results:")
-    sim_1_2 = cosine_similarity(embedding_vectors[0], embedding_vectors[1])
-    sim_2_3 = cosine_similarity(embedding_vectors[1], embedding_vectors[2])
-    sim_3_1 = cosine_similarity(embedding_vectors[2], embedding_vectors[0])
+    print("\n=== Loading Documents into Vector Database ===")
+    file_path = "HealthInsuranceBrochure.md"
+    doc_id = load_document(vector_store, file_path)
+    if doc_id:
+        print(f"Document '{file_path}' loaded successfully with ID: {doc_id}")
 
-    print(f"Sentence 1 vs Sentence 2: {sim_1_2:.4f}")
-    print(f"Sentence 2 vs Sentence 3: {sim_2_3:.4f}")
-    print(f"Sentence 3 vs Sentence 1: {sim_3_1:.4f}")
-    
+    file_path2 = "EmployeeHandbook.md"
+    doc_id2 = load_document(vector_store, file_path2)
+    if doc_id2:
+        print(f"Document '{file_path2}' loaded successfully with ID: {doc_id2}")
 
 if __name__ == "__main__":
     main()
